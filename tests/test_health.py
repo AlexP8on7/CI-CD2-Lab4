@@ -1,7 +1,8 @@
-# tests/test_health.py
-from confest import client
+#test_health.py
+import pytest
 
+#health test
 def test_health(client):
- r = client.get("/health")
- assert r.status_code == 200
- assert r.json() == {"status": "ok"}
+    result = client.get("/health")
+    assert result.status_code == 200
+    assert result.json() == {"status": "ok"}
