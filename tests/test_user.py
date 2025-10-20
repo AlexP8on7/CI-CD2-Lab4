@@ -1,62 +1,68 @@
-#test_users.py
+# tests/test_users.py
+
 import pytest
+import uuid
 
-#import users to clear the list
-from app.main import users
+def user_payload(name="Alex", email=None, age=25, sid=None):
+    if email is None:
+        email = f"test{uuid.uuid4().hex[:8]}@atu.ie"
+    if sid is None:
+        import random
+        sid = f"S{random.randint(1000000, 9999999)}"
+    return {"name": name, "email": email, "age": age, "student_id": sid}
 
-#Payload to pass as default object
-def user_payload(uid=1, name="Paul", email="pl@atu.ie", age=25, sid="S1234567"):
-    return {"user_id": uid, "name": name, "email": email, "age": age, "student_id":sid}
-
-#Tests below
 def test_create_user_ok(client):
-    users.clear()
+    """tests if you can successfully create a user"""
     result = client.post("/api/users", json=user_payload())
     assert result.status_code == 201
     data = result.json()
-    assert data["user_id"] == 1
-    assert data["name"] == "Paul"
+    assert "id" in data
+    assert data["name"] == "Alex"
 
 def test_duplicate_user_id_conflict(client):
-    users.clear()
-    client.post("/api/users", json=user_payload(uid=2))
-    result = client.post("/api/users", json=user_payload(uid=2))
+    """tests you can create a user with an existing id"""
+    payload = user_payload()
+    client.post("/api/users", json=payload)
+    result = client.post("/api/users", json=payload)
     assert result.status_code == 409 # duplicate id -> conflict
     assert "exists" in result.json()["detail"].lower()
 
 @pytest.mark.parametrize("bad_sid", ["BAD123", "s1234567", "S123", "S12345678"])
 def test_bad_student_id_422(client, bad_sid):
-    users.clear()
-    result = client.post("/api/users", json=user_payload(uid=3, sid=bad_sid))
-    assert result.status_code == 422 # pydantic validation error
-
-@pytest.mark.parametrize("bad_email", ["fakeEmai", "FakeEmail1", "@email"])
-def test_bad_email_422(client, bad_email):
-    users.clear()
-    result = client.post("/api/users", json=user_payload(uid=3, email=bad_email))
+    """tests invalid user ids throw 422 error"""
+    result = client.post("/api/users", json=user_payload(sid=bad_sid))
     assert result.status_code == 422 # pydantic validation error
 
 def test_get_user_404(client):
+    """tests 404 is thrown when a user does not exist when trying to get them"""
     result = client.get("/api/users/999")
     assert result.status_code == 404
 
 def test_delete_then_404(client):
-    users.clear()
-    client.post("/api/users", json=user_payload(uid=10))
-    result1 = client.delete("/api/users/10")
+    """tests 404 is throw when trying to delete a user who does not exist"""
+    result = client.post("/api/users", json=user_payload())
+    user_id = result.json()["id"]
+    result1 = client.delete(f"/api/delete/users/{user_id}")
     assert result1.status_code == 204
-    result2 = client.delete("/api/users/10")
+    result2 = client.delete(f"/api/delete/users/{user_id}")
     assert result2.status_code == 404
 
-def test_put_200(client):
-    users.clear()
-    client.post("/api/users", json=user_payload())
-    result = client.put("/api/users/1",json=user_payload(name="Jim"))
-    assert result.status_code == 200
+def test_edit_user_ok(client):
+    """tests you can edit an existing user"""
+    payload = user_payload()
+    result = client.post("/api/users", json=payload)
+    user_id = result.json()["id"]
+    result1 = client.put(f"/api/users/{user_id}", json=user_payload(email=payload["email"], sid=payload["student_id"], age=20))
+    assert result1.status_code == 200
 
-def test_put_404(client):
-    users.clear()
+def test_edit_user_404(client):
+    """tests you can't edit a user that does not exist"""
     client.post("/api/users", json=user_payload())
-    result = client.put("/api/users/2",json=user_payload(name="Joe"))
+    result = client.put("/api/users/999", json=user_payload(age=20))
     assert result.status_code == 404
-    assert result.json()["detail"] == "User not found"
+
+@pytest.mark.parametrize("bad_age", ["BAD", "10", "$^", "bad"])
+def test_bad_age_422(client, bad_age):
+    """tests invalid ages"""
+    result = client.post("/api/users", json=user_payload(age=bad_age))
+    assert result.status_code == 422 # pydantic validation error

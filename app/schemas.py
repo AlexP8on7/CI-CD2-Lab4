@@ -1,10 +1,22 @@
 # app/schemas.py
-from pydantic import BaseModel, EmailStr, constr, conint, field_validator
-import re
+from typing import Annotated
+from pydantic import BaseModel, EmailStr, Field, StringConstraints, ConfigDict
 
-class User(BaseModel):
- user_id: int
- name: constr(min_length=2, max_length=50)
- email: EmailStr
- age: conint(gt=18)
- student_id: constr(min_length=8, max_length=8, pattern='S[0-9]')
+NameStr = Annotated[str, StringConstraints(min_length=2, max_length=50)]
+StudentId = Annotated[str, StringConstraints(pattern=r"^S\d{7}$")]
+
+class UserCreate(BaseModel):
+    name: NameStr
+    email: EmailStr
+    age: int = Field(gt=18)
+    student_id: StudentId
+
+class UserRead(BaseModel):
+    id: int
+    name: NameStr
+    email: EmailStr
+    age: int
+    student_id: StudentId
+
+    model_config = ConfigDict(from_attributes=True)
+
